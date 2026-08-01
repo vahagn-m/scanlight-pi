@@ -1,0 +1,4 @@
+[submodule "scanlight"]
+	path = scanlight
+	url = https://github.com/jackw01/scanlight.git
+	branch = main
