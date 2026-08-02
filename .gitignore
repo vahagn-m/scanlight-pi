@@ -1,6 +1,5 @@
 # Dependencies / build output (if any JS tooling is added at this root)
 node_modules/
-dist/
 
 # OS / editor cruft
 .DS_Store
