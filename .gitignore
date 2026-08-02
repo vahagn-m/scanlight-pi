@@ -5,3 +5,7 @@ dist/
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# Claude Code session state
+.claude/worktrees/
+.claude/settings.local.json
