@@ -63,3 +63,19 @@ This is a **Node.js** application that bridges client interfaces with physical h
 * **Do Not Crash the Loop:** Hardware failures (camera focus error, unplugged USB) must **never** crash the main Node.js event loop. Catch hardware exceptions, log them with context, and relay error messages over Socket.io.
 * **Async/Await:** Prefer `async/await` wrapped in explicit `try...catch` blocks over raw promise chains for hardware wrappers.
 * **Idempotent Teardowns:** Cleanup and initialization procedures for hardware must be safe to execute multiple times sequentially.
+
+---
+
+## 5. Build Before Push (web app)
+* `app/web/dist/` is checked into git — the Raspberry Pi Zero deployment pulls
+  pre-built assets instead of building (see commit `0286d51`).
+* Any change affecting the frontend bundle (`app/web/**`, `app/vite.config.js`,
+  frontend dependencies) MUST be rebuilt and the new `dist/` committed before pushing:
+
+  ```bash
+  cd app && npm run build
+  git add app/web/dist
+  ```
+
+* Pushing frontend changes without the rebuilt `dist/` leaves the deployed app
+  serving a stale UI.
