@@ -21,8 +21,11 @@
               <v-icon start>{{ cameraConnected ? "mdi-camera" : "mdi-camera-off" }}</v-icon>
               {{ cameraConnected ? `Camera — ${cameraModel}` : "Camera not found" }}
             </v-chip>
-            <v-btn class="mb-2" color="primary" variant="tonal" @click="rescan">
+            <v-btn class="mb-2 mr-2" color="secondary" @click="rescan">
               Rescan devices
+            </v-btn>
+            <v-btn class="mb-2" color="secondary" :disabled="!cameraConnected || sequenceRunning" @click="testCapture">
+              Test Shutter
             </v-btn>
             <v-alert
               v-if="showPowerCableWarning"
@@ -283,7 +286,6 @@
             <v-btn class="mr-2 mb-2" color="primary" :disabled="sequenceRunning" @click="startSequence('RGBIR')" v-if="hwSupportsIR">Auto R,G,B,IR</v-btn>
             <v-btn class="mr-2 mb-2" color="primary" :disabled="sequenceRunning" @click="startSequence('NWIR')" v-if="hwSupportsIR">Auto RGB,IR</v-btn>
             <v-btn class="mr-2 mb-2" color="primary" :disabled="sequenceRunning" @click="startSequence('BWIR')" v-if="hwSupportsIR">Auto W,IR</v-btn>
-            <v-btn class="mr-2 mb-2" color="primary" :disabled="sequenceRunning" @click="testCapture">Test Capture</v-btn>
             <v-btn class="mr-2 mb-2" color="error" variant="tonal" :disabled="!sequenceRunning" @click="abortSequence">Abort</v-btn>
           </v-card-text>
         </v-card>
@@ -471,9 +473,9 @@ export default {
     });
     socket.on("camera:test:done", (result) => {
       if (result.ok) {
-        this.notify("Test capture OK", "success");
+        this.notify("Test shutter OK", "success");
       } else {
-        this.notify(`Test capture failed: ${result.message}`, "error");
+        this.notify(`Test shutter failed: ${result.message}`, "error");
       }
     });
     socket.on("system:error", (err) => {
