@@ -11,9 +11,18 @@ export const RECONNECT_MAX_BACKOFF_MS = 10000;
 
 // --- Camera (gphoto2) ------------------------------------------------------
 export const GPHOTO2_BIN = process.env.GPHOTO2_BIN || "gphoto2";
-export const GPHOTO2_TIMEOUT_MS = 15000; // Kill hung capture processes.
-export const GPHOTO2_DETECT_TIMEOUT_MS = 10000;
+export const GPHOTO2_DETECT_TIMEOUT_MS = 10000; // Per-process --auto-detect (enumerate-only, no USB claim).
 export const GPHOTO2_KILL_GRACE_MS = 2000; // SIGTERM -> wait -> SIGKILL.
+// Persistent `gphoto2 --shell` session (warm PTP connection, fast triggers):
+export const GPHOTO2_SHELL_READY_MS = 10000; // Wait for the first shell prompt after spawn.
+export const GPHOTO2_SHELL_CMD_MS = 10000; // Generic shell command round-trip timeout.
+export const GPHOTO2_CAPTURE_CMD_MS = 15000; // Shutter command round-trip timeout.
+export const GPHOTO2_RESTART_BACKOFF_MS = 2000; // Respawn backoff after session death.
+export const GPHOTO2_RESTART_MAX_BACKOFF_MS = 10000;
+// Shutter trigger issued inside the shell. Canon EOS fastest path; override for
+// other cameras, e.g. GPHOTO2_SHUTTER_COMMAND="capture-image".
+export const SHUTTER_COMMAND =
+  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=Immediate";
 
 // --- Automation ------------------------------------------------------------
 export const CAPTURE_RETRIES = 3; // Attempts per channel before aborting the sequence.

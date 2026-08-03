@@ -8,9 +8,12 @@ with the Scanlight **and** the camera attached to it over USB.
   - USB serial (115200 baud) to the Scanlight Pico, using the same
     `[0xFE][header][len][data…]` packet protocol as the original app
     (spec: `scanlight/automation/bsl_control_interface.md`).
-  - Camera shutter via the `gphoto2` CLI (trigger only — images stay on the
-    camera card). Each capture is verified; failures retry 3× then abort the
-    scan sequence and turn the light off.
+  - Camera shutter via the `gphoto2` CLI, inside a **persistent
+    `gphoto2 --shell` session** (warm PTP connection — no per-capture USB
+    re-init). Default trigger: `set-config eosremoterelease=Immediate`
+    (fastest Canon EOS path; override via `GPHOTO2_SHUTTER_COMMAND`).
+    Trigger only — images stay on the camera card. Each capture is verified;
+    failures retry 3× then abort the scan sequence and turn the light off.
 - **Vue 3 + Vuetify 3 UI** (a port of the original `app_bsl`) talks to the
   server over **Socket.io**. Any browser on the LAN can connect — no Web
   Serial, no Chromium requirement.
@@ -66,6 +69,7 @@ Open the printed URL in any browser.
 | `PORT` | `3000` | HTTP/Socket.io port |
 | `HOST` | `0.0.0.0` | Listen address (no auth — keep to trusted LANs) |
 | `GPHOTO2_BIN` | `gphoto2` | gphoto2 executable/path |
+| `GPHOTO2_SHUTTER_COMMAND` | `set-config eosremoterelease=Immediate` | Shell command that fires the shutter (e.g. `capture-image` for non-Canon cameras) |
 | `MOCK_SERIAL=1` | — | Emulated Pico (no hardware needed) |
 | `MOCK_CAMERA=1` | — | Emulated camera (add `MOCK_CAMERA_FAIL=1` to force capture failures) |
 
@@ -92,8 +96,14 @@ WantedBy=multi-user.target
 
 - **Scanlight disconnected chip / `EACCES` on open** — serial permissions;
   see the `dialout` note above.
-- **Camera busy / `-1: Unspecified error`** — another process (gvfs, PTP
-  daemon) holds the camera; disable automount daemons or replug the camera.
+- **Camera busy / `-1: Unspecified error` / `Could not claim the USB device`** —
+  another process (gvfs, PTP daemon) holds the camera; disable automount
+  daemons or replug the camera. On macOS the system `ptpcamerad` claims the
+  camera (`sudo pkill -9 ptpcamerad` to test; it respawns) — the app targets
+  Linux, where disabling gvfs-gphoto2-volume-monitor is enough.
+- **Other gphoto2 tools fail while the server runs** — by design: the
+  persistent shell session holds the camera USB lock for fast triggering.
+  Stop the service to use another tool.
 - **Capture timeouts** — some cameras need longer; the per-capture timeout is
   15 s (`GPHOTO2_TIMEOUT_MS` in `server/config.js`).
 

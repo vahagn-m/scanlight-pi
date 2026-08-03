@@ -89,6 +89,11 @@ async function main() {
     } catch (err) {
       console.error("serial close failed:", err.message);
     }
+    try {
+      camera.close(); // kill the persistent gphoto2 --shell session
+    } catch (err) {
+      console.error("camera close failed:", err.message);
+    }
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 2000).unref();
   };
