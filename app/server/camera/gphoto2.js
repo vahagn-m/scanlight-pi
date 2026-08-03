@@ -356,8 +356,19 @@ export async function captureImage() {
     }
     return { ok: true };
   }
-  await shell.command(SHUTTER_COMMAND, GPHOTO2_CAPTURE_CMD_MS);
-  return { ok: true };
+  try {
+    await shell.command(SHUTTER_COMMAND, GPHOTO2_CAPTURE_CMD_MS);
+    return { ok: true };
+  } catch (err) {
+    // Non-busy failure (camera unplugged, stale USB port binding, PTP error):
+    // discard the session so the caller's next attempt respawns it fresh and
+    // rebinds the camera wherever it re-enumerated. Busy/locked sessions are
+    // healthy — keep them warm.
+    if (!(err instanceof Gphoto2Error && err.busy)) {
+      shell.killSession("capture error recovery");
+    }
+    throw err;
+  }
 }
 
 /** Tear down the shell session (server shutdown). Idempotent. */
