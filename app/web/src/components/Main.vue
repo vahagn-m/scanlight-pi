@@ -62,6 +62,7 @@
               color="red"
               :min="0"
               :max="255"
+              :step="1"
               @end="update"
             ></v-slider>
             <v-number-input
@@ -77,6 +78,7 @@
               color="green"
               :min="0"
               :max="255"
+              :step="1"
               @end="update"
             ></v-slider>
             <v-number-input
@@ -92,6 +94,7 @@
               color="blue"
               :min="0"
               :max="255"
+              :step="1"
               @end="update"
             ></v-slider>
             <v-row justify="space-between">
@@ -353,8 +356,8 @@ export default {
       presets: [],
       selectedPresetName: null,
       // Automation
-      preCaptureDelay: 0.1,
-      postCaptureDelay: 1.0,
+      preCaptureDelay: 0.01,
+      postCaptureDelay: 0.1,
       keepLightOn: false,
       sequenceRunning: false,
       sequence: { step: 0, total: 0, channelLabel: "", phase: "" },
@@ -492,10 +495,12 @@ export default {
     },
     update() {
       if (!this.serialConnected || this.sequenceRunning) return;
+      // Inputs can produce non-integers (slider drift, typed decimals, cleared
+      // fields); the protocol takes byte values, so normalize before sending.
       socket.emit("light:update", {
-        r: this.red,
-        g: this.green,
-        b: this.blue,
+        r: Math.round(this.red),
+        g: Math.round(this.green),
+        b: Math.round(this.blue),
         channels: this.enabledChannels,
         saveFlag: 0,
       });

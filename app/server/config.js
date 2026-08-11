@@ -19,10 +19,17 @@ export const GPHOTO2_SHELL_CMD_MS = 10000; // Generic shell command round-trip t
 export const GPHOTO2_CAPTURE_CMD_MS = 15000; // Shutter command round-trip timeout.
 export const GPHOTO2_RESTART_BACKOFF_MS = 2000; // Respawn backoff after session death.
 export const GPHOTO2_RESTART_MAX_BACKOFF_MS = 10000;
+// The camera answers PTP "Device Busy" (-110: 'I/O in progress') until it has
+// finished processing the previous shot (card write). Keep the warm session
+// and re-poll the trigger on this cadence/budget instead of failing the attempt.
+// Tight cadence: the poll that finds the camera ready IS the shot, so this
+// directly bounds how fast successive captures can follow each other.
+export const GPHOTO2_BUSY_POLL_MS = 200;
+export const GPHOTO2_BUSY_WAIT_MS = 10000;
 // Shutter trigger issued inside the shell. Canon EOS fastest path; override for
 // other cameras, e.g. GPHOTO2_SHUTTER_COMMAND="capture-image".
 export const SHUTTER_COMMAND =
-  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=Immediate";
+  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=4";
 
 // --- Automation ------------------------------------------------------------
 export const CAPTURE_RETRIES = 3; // Attempts per channel before aborting the sequence.

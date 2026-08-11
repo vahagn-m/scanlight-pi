@@ -41,13 +41,14 @@ function setColorPayload(mask) {
  * @param {{serial: import("../serial/manager.js").SerialManager}} deps
  * @param {{abortRequested: boolean}} control Set abortRequested to stop after the current phase.
  * @param {{progress: () => void, lightState: () => void}} emit
- * @returns {Promise<{ok: boolean, aborted: boolean, errors: string[], captures: number}>}
+ * @returns {Promise<{ok: boolean, aborted: boolean, errors: string[], warnings: string[], captures: number}>}
  */
 export async function runSequence(opts, deps, control, emit) {
   const { name, preDelay, postDelay, keepLightOn } = opts;
   const { serial } = deps;
   const steps = Sequences[name];
-  const errors = [];
+  const errors = []; // fatal: channel never captured
+  const warnings = []; // recovered: capture succeeded after failed attempts
   let captures = 0;
 
   const sendColor = async (mask) => {
@@ -81,15 +82,21 @@ export async function runSequence(opts, deps, control, emit) {
       state.sequence.phase = "capture";
       emit.progress();
       let captured = false;
+      const attemptErrors = [];
       for (let attempt = 0; attempt < CAPTURE_RETRIES; attempt++) {
         if (control.abortRequested) break;
         try {
-          await camera.captureImage();
+          await camera.captureImage({ shouldAbort: () => control.abortRequested });
           captured = true;
           captures++;
+          if (attemptErrors.length) {
+            warnings.push(
+              `channel ${label}: captured on attempt ${attempt + 1} (${attemptErrors.join("; ")})`
+            );
+          }
           break;
         } catch (err) {
-          errors.push(`channel ${label}, attempt ${attempt + 1}: ${err.message}`);
+          attemptErrors.push(`channel ${label}, attempt ${attempt + 1}: ${err.message}`);
           if (attempt < CAPTURE_RETRIES - 1) {
             await waitSeconds((CAPTURE_BACKOFF_MS[attempt] ?? 1000) / 1000, control);
           }
@@ -97,6 +104,7 @@ export async function runSequence(opts, deps, control, emit) {
       }
       if (control.abortRequested) break;
       if (!captured) {
+        errors.push(...attemptErrors);
         throw new Error(`capture failed on channel ${label} after ${CAPTURE_RETRIES} attempts`);
       }
 
@@ -128,6 +136,7 @@ export async function runSequence(opts, deps, control, emit) {
     ok: !failed,
     aborted: control.abortRequested,
     errors,
+    warnings,
     captures,
   };
 }

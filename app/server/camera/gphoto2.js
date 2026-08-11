@@ -27,6 +27,8 @@ import {
   GPHOTO2_CAPTURE_CMD_MS,
   GPHOTO2_RESTART_BACKOFF_MS,
   GPHOTO2_RESTART_MAX_BACKOFF_MS,
+  GPHOTO2_BUSY_POLL_MS,
+  GPHOTO2_BUSY_WAIT_MS,
   SHUTTER_COMMAND,
 } from "../config.js";
 
@@ -51,14 +53,17 @@ const PROMPT_RE = /gphoto2:\s*\{[^}]*\}[^>\n]*>\s*$/;
 
 // Error signatures in command output. Errors appear compactly on stdout
 // (`*** Error (-53: '...') ***`) and verbosely on stderr — both are scanned.
-const BUSY_PATTERN = /-1:\s*Unspecified error|Could not (lock|claim)|could not lock|camera is busy/i;
+// Busy covers both a daemon holding the USB lock (-1: 'Unspecified error')
+// and the camera still processing the previous shot (-110: 'I/O in progress').
+const BUSY_PATTERN =
+  /-1:\s*Unspecified error|Could not (lock|claim)|could not lock|camera is busy|-110:|I\/O in progress/i;
 const ERROR_PATTERN = /\*\*\*\s*Error|ERROR:/i;
 
 function assertSuccess(text, cmd) {
   const detail = text.trim();
   if (BUSY_PATTERN.test(detail)) {
     throw new Gphoto2Error(
-      "camera busy — another process may hold it (disable gvfs-gphoto2-volume-monitor / PTP daemons, or replug the camera)",
+      "camera busy — still processing a shot, or another process holds it (disable gvfs-gphoto2-volume-monitor / PTP daemons, or replug the camera)",
       { busy: true, detail }
     );
   }
@@ -344,11 +349,15 @@ export async function detect() {
 
 /**
  * Trigger one exposure through the warm shell session (image stays on the
- * camera card). Default command: `set-config eosremoterelease=Immediate`
+ * camera card). Default command: `set-config eosremoterelease=4`
  * (fastest Canon EOS path; override with GPHOTO2_SHUTTER_COMMAND).
- * Throws Gphoto2Error on failure; the session auto-respawns on death.
+ * If the camera is still busy with the previous shot ("I/O in progress"),
+ * the trigger is re-polled with the session kept warm. Throws Gphoto2Error
+ * on failure; the session auto-respawns on death.
+ * @param {{shouldAbort?: () => boolean}} opts Optional abort probe checked between busy polls.
  */
-export async function captureImage() {
+export async function captureImage(opts = {}) {
+  const shouldAbort = opts.shouldAbort ?? (() => false);
   if (mock) {
     await sleep(MOCK_CAPTURE_MS);
     if (mockFail) {
@@ -356,18 +365,24 @@ export async function captureImage() {
     }
     return { ok: true };
   }
-  try {
-    await shell.command(SHUTTER_COMMAND, GPHOTO2_CAPTURE_CMD_MS);
-    return { ok: true };
-  } catch (err) {
-    // Non-busy failure (camera unplugged, stale USB port binding, PTP error):
-    // discard the session so the caller's next attempt respawns it fresh and
-    // rebinds the camera wherever it re-enumerated. Busy/locked sessions are
-    // healthy — keep them warm.
-    if (!(err instanceof Gphoto2Error && err.busy)) {
-      shell.killSession("capture error recovery");
+  const busyDeadline = Date.now() + GPHOTO2_BUSY_WAIT_MS;
+  for (;;) {
+    try {
+      await shell.command(SHUTTER_COMMAND, GPHOTO2_CAPTURE_CMD_MS);
+      return { ok: true };
+    } catch (err) {
+      if (!(err instanceof Gphoto2Error && err.busy)) {
+        // Non-busy failure (camera unplugged, stale USB port binding, PTP
+        // error): discard the session so the caller's next attempt respawns
+        // it fresh and rebinds the camera wherever it re-enumerated.
+        shell.killSession("capture error recovery");
+        throw err;
+      }
+      // Camera still writing the previous shot: keep the warm session and
+      // poll until it accepts the trigger again (or the budget runs out).
+      if (shouldAbort() || Date.now() >= busyDeadline) throw err;
+      await sleep(GPHOTO2_BUSY_POLL_MS);
     }
-    throw err;
   }
 }
 

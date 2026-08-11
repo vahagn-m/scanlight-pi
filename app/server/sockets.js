@@ -215,12 +215,12 @@ export function registerSocketHandlers(io, { serial }) {
         const { sequence, keepLightOn } = payload ?? {};
         if (!Sequences[sequence]) return fail("sequence", `unknown sequence "${sequence}"`);
         const preDelay = clamp(
-          Number(payload?.preDelay ?? 0.1),
+          Number(payload?.preDelay ?? SEQUENCE_PRE_DELAY_MIN_S),
           SEQUENCE_PRE_DELAY_MIN_S,
           SEQUENCE_PRE_DELAY_MAX_S
         );
         const postDelay = clamp(
-          Number(payload?.postDelay ?? 1.0),
+          Number(payload?.postDelay ?? SEQUENCE_POST_DELAY_MIN_S),
           SEQUENCE_POST_DELAY_MIN_S,
           SEQUENCE_POST_DELAY_MAX_S
         );
