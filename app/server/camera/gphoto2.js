@@ -99,6 +99,16 @@ class Gphoto2Shell {
   }
 
   /**
+   * Non-exposing readiness probe: a read that reports PTP Device Busy while
+   * the camera is still processing. Used to wait for the camera to be ready
+   * BEFORE triggering, so the shutter command itself is only ever sent once
+   * (re-sending it in a busy-retry loop re-fires the shutter on some bodies).
+   */
+  async probeReady() {
+    await this.command("get-config eosremoterelease", GPHOTO2_SHELL_CMD_MS);
+  }
+
+  /**
    * Resolve the shutter command for this gphoto2 build. An explicit
    * GPHOTO2_SHUTTER_COMMAND always wins. Otherwise query the
    * eosremoterelease widget once and pick the first preferred value it
@@ -385,10 +395,14 @@ export async function detect() {
  * Trigger one exposure through the warm shell session (image stays on the
  * camera card). The trigger defaults to the first accepted eosremoterelease
  * value of the installed gphoto2 build (see resolveShutterCommand); override
- * with GPHOTO2_SHUTTER_COMMAND. If the camera is still busy with the previous
- * shot ("I/O in progress"), the trigger is re-polled with the session kept
- * warm. Throws Gphoto2Error on failure; the session auto-respawns on death.
- * @param {{shouldAbort?: () => boolean}} opts Optional abort probe checked between busy polls.
+ * with GPHOTO2_SHUTTER_COMMAND.
+ *
+ * The camera reports PTP Device Busy while it finishes an exposure, so we wait
+ * for it to become ready using a NON-exposing probe and then send the shutter
+ * command exactly once. The trigger must not be re-sent in a busy-retry loop:
+ * on some bodies each send fires the shutter again (continuous shooting).
+ * Throws Gphoto2Error on failure; the session auto-respawns on death.
+ * @param {{shouldAbort?: () => boolean}} opts Optional abort probe checked while waiting.
  */
 export async function captureImage(opts = {}) {
   const shouldAbort = opts.shouldAbort ?? (() => false);
@@ -401,23 +415,40 @@ export async function captureImage(opts = {}) {
   }
   const shutterCmd = await shell.resolveShutterCommand();
   const busyDeadline = Date.now() + GPHOTO2_BUSY_WAIT_MS;
+
+  // Wait until the camera is no longer busy from a previous exposure BEFORE
+  // triggering. probeReady is a read, so polling it never takes a shot.
   for (;;) {
     try {
-      await shell.command(shutterCmd, GPHOTO2_CAPTURE_CMD_MS);
-      return { ok: true };
+      await shell.probeReady();
+      break;
     } catch (err) {
-      if (!(err instanceof Gphoto2Error && err.busy)) {
-        // Non-busy failure (camera unplugged, stale USB port binding, PTP
-        // error): discard the session so the caller's next attempt respawns
-        // it fresh and rebinds the camera wherever it re-enumerated.
-        shell.killSession("capture error recovery");
-        throw err;
+      if (err instanceof Gphoto2Error && err.busy) {
+        if (shouldAbort() || Date.now() >= busyDeadline) throw err;
+        await sleep(GPHOTO2_BUSY_POLL_MS);
+        continue;
       }
-      // Camera still writing the previous shot: keep the warm session and
-      // poll until it accepts the trigger again (or the budget runs out).
-      if (shouldAbort() || Date.now() >= busyDeadline) throw err;
-      await sleep(GPHOTO2_BUSY_POLL_MS);
+      // Probe not applicable (e.g. non-EOS override) — fire anyway; a real
+      // problem will surface from the trigger itself below.
+      break;
     }
+  }
+
+  try {
+    await shell.command(shutterCmd, GPHOTO2_CAPTURE_CMD_MS);
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof Gphoto2Error && err.busy) {
+      // The camera went busy as the trigger landed — the exposure was taken
+      // and it is now processing. Do NOT re-send the trigger (that re-fires
+      // the shutter); report success and let the next capture wait it out.
+      return { ok: true };
+    }
+    // Non-busy failure (camera unplugged, stale USB port binding, PTP error):
+    // discard the session so the caller's next attempt respawns it fresh and
+    // rebinds the camera wherever it re-enumerated.
+    shell.killSession("capture error recovery");
+    throw err;
   }
 }
 
