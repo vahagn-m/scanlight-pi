@@ -30,6 +30,7 @@ import {
   GPHOTO2_BUSY_POLL_MS,
   GPHOTO2_BUSY_WAIT_MS,
   SHUTTER_COMMAND,
+  SHUTTER_VALUE_PREFERENCE,
 } from "../config.js";
 
 const mock = process.env.MOCK_CAMERA === "1";
@@ -90,10 +91,43 @@ class Gphoto2Shell {
     this.inflight = 0;
     this.restartAttempts = 0;
     this.promptLogged = false;
+    this.shutterCommand = null; // resolved trigger, cached per gphoto2 build
   }
 
   isBusy() {
     return this.inflight > 0;
+  }
+
+  /**
+   * Resolve the shutter command for this gphoto2 build. An explicit
+   * GPHOTO2_SHUTTER_COMMAND always wins. Otherwise query the
+   * eosremoterelease widget once and pick the first preferred value it
+   * accepts — accepted labels differ across libgphoto2 versions, and some
+   * builds silently ignore invalid values instead of erroring.
+   */
+  async resolveShutterCommand() {
+    if (SHUTTER_COMMAND) return SHUTTER_COMMAND;
+    if (this.shutterCommand) return this.shutterCommand;
+    const fallback = SHUTTER_VALUE_PREFERENCE[0];
+    let output;
+    try {
+      output = await this.command("get-config eosremoterelease", GPHOTO2_SHELL_CMD_MS);
+    } catch (err) {
+      // Leave un-cached so the next capture retries detection.
+      console.log(`[camera] shutter detection failed (${err.message}) — trying ${fallback}`);
+      return `set-config eosremoterelease=${fallback}`;
+    }
+    const choices = [...output.matchAll(/^Choice:\s*\d+\s+(.+)$/gm)].map((m) => m[1].trim());
+    const value = SHUTTER_VALUE_PREFERENCE.find((v) => choices.includes(v)) ?? fallback;
+    if (!choices.includes(value)) {
+      console.log(
+        `[camera] eosremoterelease choices (${choices.join(", ") || "none parsed"}) ` +
+          `include no preferred value — defaulting to ${value}`
+      );
+    }
+    this.shutterCommand = `set-config eosremoterelease=${value}`;
+    console.log(`[camera] shutter trigger: ${this.shutterCommand}`);
+    return this.shutterCommand;
   }
 
   /** Run one shell command; resolves with its output (prompt/echo stripped). */
@@ -349,11 +383,11 @@ export async function detect() {
 
 /**
  * Trigger one exposure through the warm shell session (image stays on the
- * camera card). Default command: `set-config eosremoterelease=Immediate`
- * (fastest Canon EOS path; override with GPHOTO2_SHUTTER_COMMAND).
- * If the camera is still busy with the previous shot ("I/O in progress"),
- * the trigger is re-polled with the session kept warm. Throws Gphoto2Error
- * on failure; the session auto-respawns on death.
+ * camera card). The trigger defaults to the first accepted eosremoterelease
+ * value of the installed gphoto2 build (see resolveShutterCommand); override
+ * with GPHOTO2_SHUTTER_COMMAND. If the camera is still busy with the previous
+ * shot ("I/O in progress"), the trigger is re-polled with the session kept
+ * warm. Throws Gphoto2Error on failure; the session auto-respawns on death.
  * @param {{shouldAbort?: () => boolean}} opts Optional abort probe checked between busy polls.
  */
 export async function captureImage(opts = {}) {
@@ -365,10 +399,11 @@ export async function captureImage(opts = {}) {
     }
     return { ok: true };
   }
+  const shutterCmd = await shell.resolveShutterCommand();
   const busyDeadline = Date.now() + GPHOTO2_BUSY_WAIT_MS;
   for (;;) {
     try {
-      await shell.command(SHUTTER_COMMAND, GPHOTO2_CAPTURE_CMD_MS);
+      await shell.command(shutterCmd, GPHOTO2_CAPTURE_CMD_MS);
       return { ok: true };
     } catch (err) {
       if (!(err instanceof Gphoto2Error && err.busy)) {

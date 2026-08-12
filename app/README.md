@@ -10,8 +10,11 @@ with the Scanlight **and** the camera attached to it over USB.
     (spec: `scanlight/automation/bsl_control_interface.md`).
   - Camera shutter via the `gphoto2` CLI, inside a **persistent
     `gphoto2 --shell` session** (warm PTP connection — no per-capture USB
-    re-init). Default trigger: `set-config eosremoterelease=Immediate`
-    (fastest Canon EOS path; override via `GPHOTO2_SHUTTER_COMMAND`).
+    re-init). Default trigger: the first `eosremoterelease` value the
+    installed gphoto2 accepts — auto-detected from the widget's choices,
+    because the accepted labels differ across libgphoto2 builds and some
+    builds silently ignore invalid values. Override via
+    `GPHOTO2_SHUTTER_COMMAND`.
     Trigger only — images stay on the camera card. Each capture is verified;
     failures retry 3× then abort the scan sequence and turn the light off.
 - **Vue 3 + Vuetify 3 UI** (a port of the original `app_bsl`) talks to the
@@ -69,7 +72,7 @@ Open the printed URL in any browser.
 | `PORT` | `3000` | HTTP/Socket.io port |
 | `HOST` | `0.0.0.0` | Listen address (no auth — keep to trusted LANs) |
 | `GPHOTO2_BIN` | `gphoto2` | gphoto2 executable/path |
-| `GPHOTO2_SHUTTER_COMMAND` | `set-config eosremoterelease=Immediate` | Shell command that fires the shutter (e.g. `capture-image` for non-Canon cameras) |
+| `GPHOTO2_SHUTTER_COMMAND` | auto-detected `eosremoterelease` value | Shell command that fires the shutter (e.g. `capture-image` for non-Canon cameras) |
 | `MOCK_SERIAL=1` | — | Emulated Pico (no hardware needed) |
 | `MOCK_CAMERA=1` | — | Emulated camera (add `MOCK_CAMERA_FAIL=1` to force capture failures) |
 

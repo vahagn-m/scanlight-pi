@@ -26,10 +26,14 @@ export const GPHOTO2_RESTART_MAX_BACKOFF_MS = 10000;
 // directly bounds how fast successive captures can follow each other.
 export const GPHOTO2_BUSY_POLL_MS = 200;
 export const GPHOTO2_BUSY_WAIT_MS = 10000;
-// Shutter trigger issued inside the shell. Canon EOS fastest path; override for
-// other cameras, e.g. GPHOTO2_SHUTTER_COMMAND="capture-image".
-export const SHUTTER_COMMAND =
-  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=Immediate";
+// Shutter trigger issued inside the shell. If GPHOTO2_SHUTTER_COMMAND is set it
+// is used verbatim (e.g. "capture-image" for non-Canon cameras). Otherwise the
+// first eosremoterelease value below that the installed gphoto2 accepts is
+// picked at runtime from the widget's choices — the accepted labels differ
+// across libgphoto2 versions ("Immediate" was renamed in newer builds), and
+// invalid values are silently ignored by some builds.
+export const SHUTTER_COMMAND = process.env.GPHOTO2_SHUTTER_COMMAND || null;
+export const SHUTTER_VALUE_PREFERENCE = ["Immediate", "Press Full MF", "Press Full"];
 
 // --- Automation ------------------------------------------------------------
 export const CAPTURE_RETRIES = 3; // Attempts per channel before aborting the sequence.
