@@ -33,7 +33,7 @@ export const GPHOTO2_BUSY_WAIT_MS = 10000;
 // across libgphoto2 versions ("Immediate" was renamed in newer builds), and
 // invalid values are silently ignored by some builds.
 export const SHUTTER_COMMAND = process.env.GPHOTO2_SHUTTER_COMMAND || null;
-export const SHUTTER_VALUE_PREFERENCE = ["Immediate", "Press Full MF", "Press Full"];
+export const SHUTTER_VALUE_PREFERENCE = ["Press Full", "Press Full MF"];
 
 // --- Automation ------------------------------------------------------------
 export const CAPTURE_RETRIES = 3; // Attempts per channel before aborting the sequence.
