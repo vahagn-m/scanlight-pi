@@ -29,7 +29,7 @@ export const GPHOTO2_BUSY_WAIT_MS = 10000;
 // Shutter trigger issued inside the shell. Canon EOS fastest path; override for
 // other cameras, e.g. GPHOTO2_SHUTTER_COMMAND="capture-image".
 export const SHUTTER_COMMAND =
-  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=4";
+  process.env.GPHOTO2_SHUTTER_COMMAND || "set-config eosremoterelease=Immediate";
 
 // --- Automation ------------------------------------------------------------
 export const CAPTURE_RETRIES = 3; // Attempts per channel before aborting the sequence.

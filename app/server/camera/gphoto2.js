@@ -349,7 +349,7 @@ export async function detect() {
 
 /**
  * Trigger one exposure through the warm shell session (image stays on the
- * camera card). Default command: `set-config eosremoterelease=4`
+ * camera card). Default command: `set-config eosremoterelease=Immediate`
  * (fastest Canon EOS path; override with GPHOTO2_SHUTTER_COMMAND).
  * If the camera is still busy with the previous shot ("I/O in progress"),
  * the trigger is re-polled with the session kept warm. Throws Gphoto2Error
